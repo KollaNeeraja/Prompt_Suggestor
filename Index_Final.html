@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Prompt Suggestor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        
+        .chat-container {
+            background-color: #fff;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            width: 80%;
+            max-width: 600px;
+            overflow: hidden;
+        }
+        
+        .header {
+            background-color: #0084ff;
+            color: white;
+            text-align: center;
+            padding: 10px;
+        }
+        
+        .chat-box {
+            padding: 20px;
+            height: 300px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .result-box {
+            padding: 20px;
+            height: 100px;
+            border-top: 1px solid #ddd;
+            background-color: #f9f9f9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .input-container {
+            display: flex;
+            padding: 10px;
+            background-color: #f1f1f1;
+            border-top: 1px solid #ddd;
+        }
+        
+        .input-container textarea {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            resize: none;
+            height: 50px;
+        }
+        
+        .prompt-suggestions {
+            display: flex;
+            flex-direction: column;
+            margin-top: 10px;
+        }
+        
+        .prompt-suggestion {
+            background-color: #e0e0e0;
+            padding: 8px;
+            border-radius: 4px;
+            margin-bottom: 5px;
+            cursor: pointer;
+        }
+        
+        .prompt-suggestion:hover {
+            background-color: #d0d0d0;
+        }
+        
+        .result-box p {
+            margin: 0;
+            font-weight: bold;
+            color: #333;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="chat-container">
+        <div class="header">
+            <h2>Real-time Prompt Suggestor</h2>
+        </div>
+        <div class="chat-box" id="suggestions"></div>
+        <div class="input-container">
+            <textarea id="userInput" placeholder="Start typing..." autofocus></textarea>
+        </div>
+        <div class="result-box" id="resultBox">
+            <p>Click a suggestion to get the answer</p>
+        </div>
+    </div>
+
+    <script>
+        const apiKey = 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXx';
+
+        let timeout = null;
+
+        document.getElementById('userInput').addEventListener('input', function() {
+            clearTimeout(timeout);
+            const query = this.value;
+
+            if (query.length > 2) { // Trigger after user types more than 2 characters
+                timeout = setTimeout(() => {
+                    fetchSuggestions(query);
+                }, 1000); // Delay of 1 second after typing stops
+            }
+        });
+
+        async function fetchSuggestions(query) {
+            const suggestionsContainer = document.getElementById('suggestions');
+            suggestionsContainer.innerHTML = `<p>Loading suggestions...</p>`;
+
+            try {
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: 'gpt-3.5-turbo', // Correct model for chat completions
+                        messages: [{
+                            role: 'system',
+                            content: 'You are a helpful assistant.'
+                        }, {
+                            role: 'user',
+                            content: `Suggest 3 unique better prompt suggestions for this query: "${query}"`
+                        }],
+                        max_tokens: 150, // More tokens to ensure enough space for 3 suggestions
+                        n: 1 // Fetch only 1 response set
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status} - ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                const suggestions = data.choices[0].message.content.split("\n").filter(Boolean);
+
+                // Clear the previous suggestions
+                suggestionsContainer.innerHTML = '';
+
+                // Only show 3 unique suggestions
+                suggestions.slice(0, 3).forEach((suggestion) => {
+                    const promptElement = document.createElement('div');
+                    promptElement.classList.add('prompt-suggestion');
+                    promptElement.innerText = suggestion.trim();
+                    promptElement.onclick = () => selectPrompt(suggestion);
+                    suggestionsContainer.appendChild(promptElement);
+                });
+
+            } catch (error) {
+                console.error('Error fetching suggestions:', error);
+                suggestionsContainer.innerHTML = `<p>Error fetching suggestions. ${error.message}</p>`;
+            }
+        }
+
+        async function selectPrompt(suggestion) {
+            document.getElementById('userInput').value = suggestion;
+
+            // Send the suggestion to GPT to simulate an answer from a real data source
+            const resultBox = document.getElementById('resultBox');
+            resultBox.innerHTML = `<p>Fetching the answer...</p>`;
+
+            try {
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: 'gpt-3.5-turbo', // Using GPT to simulate an answer
+                        messages: [{
+                            role: 'system',
+                            content: 'You are an AI designed to provide direct, formal answers to factual queries.'
+                        }, {
+                            role: 'user',
+                            content: `Provide a formal, factual answer for the following query without suggesting other actions or limitations: "${suggestion}".`
+                        }],
+                        max_tokens: 200
+                    })
+                });
+
+                const data = await response.json();
+                const answer = data.choices[0].message.content;
+
+                resultBox.innerHTML = `<p>${answer}</p>`;
+            } catch (error) {
+                resultBox.innerHTML = `<p>Error fetching the answer: ${error.message}</p>`;
+            }
+        }
+    </script>
+
+</body>
+
+</html>
